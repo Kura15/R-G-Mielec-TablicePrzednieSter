@@ -4,6 +4,15 @@ import serial.tools.list_ports
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 
+# ============================================================
+#  MAPOWANIE ZNAKÓW - KODOWANIE CP 667 (Dla tablic ETKL)
+# ============================================================
+# Tablica używa sprzętowego CP 667 (zmodyfikowane CP 437).
+# Zaktualizowane na podstawie przesłanej tabeli znaków.
+ETKL_CHAR_MAP = {
+    'Ą': 0x8F, 'Ć': 0x95, 'Ę': 0x90, 'Ł': 0x9C, 'Ń': 0xA5, 'Ó': 0xA3, 'Ś': 0x98, 'Ź': 0xA0, 'Ż': 0xA1,
+    'ą': 0x86, 'ć': 0x8D, 'ę': 0x91, 'ł': 0x92, 'ń': 0xA4, 'ó': 0xA2, 'ś': 0x9E, 'ź': 0xA6, 'ż': 0xA7
+}
 
 # ============================================================
 #  SUMA KONTROLNA ASCII‑HEX
@@ -31,21 +40,36 @@ def build_37_45_frame(rest: bytes) -> bytes:
     gdzie LEN to długość <rest> w bajtach, zakodowana jako ASCII‑HEX.
     """
     length = len(rest)
-    length_hex = f"{length:02X}"  # np. 7 -> "07", 12 -> "0C", 18 -> "12"
+    length_hex = f"{length:02X}"
     len_bytes = bytes([ord(length_hex[0]), ord(length_hex[1])])
     payload = b"\x37\x45" + len_bytes + rest
     return build_frame(payload)
 
 
 # ============================================================
-#  KONWERSJA ASCII → CP1250
+#  KONWERSJA TEKSTU NA BAJTY (CP 667 / CP 437)
 # ============================================================
 
 def ascii_to_hex_bytes(text: str) -> bytes:
     text = text or ""
     if text == "":
         return b"\x00"
-    return text.encode("cp1250", errors="replace")
+    
+    output_bytes = bytearray()
+    
+    for char in text:
+        if char in ETKL_CHAR_MAP:
+            # Polskie litery z mapowania CP 667
+            output_bytes.append(ETKL_CHAR_MAP[char])
+        else:
+            try:
+                # Reszta znaków domyślnie jako sprzętowe CP 437 wyświetlacza
+                output_bytes.extend(char.encode("cp437"))
+            except UnicodeEncodeError:
+                # Jeśli znaku nie ma ani w CP 667, ani w CP 437 (np. emoji), wstawiamy spację
+                output_bytes.append(0x20) 
+                
+    return bytes(output_bytes)
 
 
 # ============================================================
@@ -129,15 +153,15 @@ class App:
         frame_data = ttk.LabelFrame(root, text="Dane")
         frame_data.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
 
-        ttk.Label(frame_data, text="Nr linii (ASCII):").grid(row=0, column=0, sticky="w")
+        ttk.Label(frame_data, text="Nr linii:").grid(row=0, column=0, sticky="w")
         self.nr_linii_var = tk.StringVar()
         ttk.Entry(frame_data, textvariable=self.nr_linii_var, width=20).grid(row=0, column=1)
 
-        ttk.Label(frame_data, text="K1 (ASCII):").grid(row=1, column=0, sticky="w")
+        ttk.Label(frame_data, text="Kierunek K1:").grid(row=1, column=0, sticky="w")
         self.k1_var = tk.StringVar()
         ttk.Entry(frame_data, textvariable=self.k1_var, width=20).grid(row=1, column=1)
 
-        ttk.Label(frame_data, text="K2 (ASCII):").grid(row=2, column=0, sticky="w")
+        ttk.Label(frame_data, text="Kierunek K2:").grid(row=2, column=0, sticky="w")
         self.k2_var = tk.StringVar()
         ttk.Entry(frame_data, textvariable=self.k2_var, width=20).grid(row=2, column=1)
 
